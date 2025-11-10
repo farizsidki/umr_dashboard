@@ -5,6 +5,7 @@ import requests
 
 # CONFIG
 st.set_page_config(page_title="Indonesia Minimum Wage Dashboard", layout="wide")
+st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
 st.title("Indonesia Regional Minimum Wage (UMR) Dashboard")
 
 # === CUSTOM CSS ===
@@ -23,12 +24,6 @@ div.block-container {
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     margin-bottom: 25px;
-}
-
-/* Dark mode support */
-[data-testid="stAppViewContainer"][class*="dark"] .card {
-    background-color: #1E1E1E;
-    box-shadow: 0 2px 8px rgba(255,255,255,0.05);
 }
 
 /* Judul antar bagian */
@@ -121,27 +116,10 @@ if df_year.empty:
     st.warning("No data available for the selected year range")
     st.stop()
 
-
-# Toggle di sidebar
-dark_mode = st.sidebar.toggle("Dark Mode", value=False)
-
-# Terapkan gaya jika aktif
-if dark_mode:
-    st.markdown("""
-        <style>
-        body, .stApp { background-color: #0E1117; color: #FAFAFA; }
-        .stMarkdown, .stTextInput, .stSelectbox, .stSlider, .stDataFrame, .stPlotlyChart { color: #FAFAFA !important; }
-        div[data-testid="stMetricValue"] { color: #00FFAA !important; }
-        </style>
-    """, unsafe_allow_html=True)
-
-
-
 # KPI UTAMA (4 metrics)
 st.markdown('<div class="card">', unsafe_allow_html=True)
 st.subheader(f"Key KPIs ({year_from}–{year_to})")
 k1, k2, k3, k4 = st.columns(4)
-
 
 # 1. Nasional tertinggi (REGION=INDONESIA)
 if not df_national.empty:
@@ -192,11 +170,9 @@ else:
     k4.metric("Lowest Provincial UMR", "Not available")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# PETA INTERAKTIF UMR PER PROVINSI (TOOLTIP SEMUA TAHUN SESUAI FILTER)
+# PETA INTERAKTIF UMR PER PROVINSI
 st.markdown('<div class="card">', unsafe_allow_html=True)
 st.markdown("### Interactive Map of UMR in Indonesia")
-
-
 
 @st.cache_data
 def load_geojson():
@@ -239,11 +215,9 @@ tooltip_data = (
 df_map = df_map.merge(tooltip_data, on="REGION", how="left")
 df_map["DETAIL_UMR"] = df_map["DETAIL_UMR"].fillna("No data available for the selected year range")
 
-# Simpan untuk custom hover
 df_map["CUSTOM_HOVER"] = df_map["REGION"] + "<br><br>" + df_map["DETAIL_UMR"]
 
-# Pilih warna sesuai dark mode
-color_scale = "Cividis" if dark_mode else "YlGnBu"
+color_scale = "YlGnBu"
 
 # Buat peta
 fig_map = px.choropleth_mapbox(
@@ -253,14 +227,13 @@ fig_map = px.choropleth_mapbox(
     locations="REGION",
     color="SALARY",
     color_continuous_scale=color_scale,
-    mapbox_style="carto-darkmatter" if dark_mode else "carto-positron",
+    mapbox_style="carto-positron",
     center={"lat": -2.5, "lon": 118},
     zoom=3.8,
     opacity=0.85,
     title=f"Indonesia UMR Map ({year_from}–{year_to})"
 )
 
-# Pakai customdata agar tooltip multiline muncul dengan HTML
 fig_map.update_traces(
     customdata=df_map[["CUSTOM_HOVER"]],
     hovertemplate="%{customdata[0]}<extra></extra>"
@@ -484,14 +457,17 @@ else:
             st.write("No data available for Top")
         else:
             st.dataframe(
-                top_df[["REGION", "PCT_CHANGE", "NOMINAL_CHANGE", "YEAR"]]
-                .assign(
-                    PCT_CHANGE=lambda x: x["PCT_CHANGE"].round(2).astype(str) + "%",
-                    NOMINAL_CHANGE=lambda x: x["NOMINAL_CHANGE"].apply(lambda y: f"Rp {int(y):,}")
-                )
-                .style.hide(axis="index"),
-                use_container_width=True
+            top_df[["REGION", "PCT_CHANGE", "NOMINAL_CHANGE", "YEAR"]]
+            .rename(columns={"PCT_CHANGE": "% Increase", "NOMINAL_CHANGE": "Nominal Increase (Rp)"})
+            .assign(
+                **{
+                    "% Increase": lambda x: x["% Increase"].round(2).astype(str) + "%",
+                    "Nominal Increase (Rp)": lambda x: x["Nominal Increase (Rp)"].apply(lambda y: f"Rp {int(y):,}")
+                }
             )
+            .style.hide(axis="index"),
+            use_container_width=True
+        )
 
             category_order_top = top_df.sort_values("PCT_CHANGE", ascending=False)["LABEL"].tolist()
             fig_top = px.bar(
@@ -715,7 +691,7 @@ else:
             labels={"GAP": "Gap (Rp)", "LABEL": "Province (Year)"},
             title=f"Top {top_bottom_n} Highest Gaps vs National Average"
         )
-        fig_top_gap.update_traces(textposition="inside", textfont=dict(color="white"))
+        fig_top_gap.update_traces(hovertemplate="Province (Year): %{y}<br>Gap: Rp %{x:,.0f}<extra></extra>",textposition="inside", textfont=dict(color="white"))
         fig_top_gap.update_layout(showlegend=False, xaxis_title="Gap (Rp)", yaxis_title=None)
         st.plotly_chart(fig_top_gap, use_container_width=True)
 
@@ -743,7 +719,7 @@ else:
             labels={"GAP": "Gap (Rp)", "LABEL": "Province (Year)"},
             title=f"Bottom {top_bottom_n} Lowest Gaps vs National Average"
         )
-        fig_bot_gap.update_traces(textposition="inside", textfont=dict(color="white"))
+        fig_bot_gap.update_traces(hovertemplate="Province (Year): %{y}<br>Gap: Rp %{x:,.0f}<extra></extra>", textposition="inside", textfont=dict(color="white"))
         fig_bot_gap.update_layout(showlegend=False, xaxis_title="Gap (Rp)", yaxis_title=None)
         st.plotly_chart(fig_bot_gap, use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)
@@ -860,7 +836,7 @@ with col_top_ratio:
         st.markdown(f"#### Top {top_bottom_n} Highest Ratios vs National Average")
         st.dataframe(
             top_ratio.assign(
-                RATIO=lambda x: (x["RATIO"] * 100).round(2).astype(str) + "%",
+                RATIO=lambda x: x["RATIO"].round(1).astype(str).str.replace('.', ',') + "%",
                 SALARY=lambda x: x["SALARY"].apply(lambda y: f"Rp {int(y):,}"),
                 SALARY_NATIONAL=lambda x: x["SALARY_NATIONAL"].apply(lambda y: f"Rp {int(y):,}")
             ).style.hide(axis="index"),
@@ -875,7 +851,7 @@ with col_top_ratio:
             x="RATIO",
             y="LABEL",
             orientation="h",
-            text=(top_ratio["RATIO"] * 100).round(2).astype(str) + "%",
+            text=top_ratio["RATIO"].round(1).astype(str).str.replace('.', ',') + "%",
             color="RATIO",
             color_continuous_scale="Viridis",
             category_orders={"LABEL": order_top_ratio},
@@ -884,6 +860,7 @@ with col_top_ratio:
         )
 
         fig_top_ratio.update_traces(
+            hovertemplate="Province (Year): %{y}<br>Ratio: %{x:.1f}%<extra></extra>",
             textposition="inside",
             textfont=dict(color="white", size=12)
         )
@@ -900,7 +877,7 @@ with col_bot_ratio:
         st.markdown(f"#### Bottom {top_bottom_n} Lowest Ratios vs National Average")
         st.dataframe(
             bot_ratio.assign(
-                RATIO=lambda x: (x["RATIO"] * 100).round(2).astype(str) + "%",
+                RATIO=lambda x: x["RATIO"].round(1).astype(str).str.replace('.', ',') + "%",
                 SALARY=lambda x: x["SALARY"].apply(lambda y: f"Rp {int(y):,}"),
                 SALARY_NATIONAL=lambda x: x["SALARY_NATIONAL"].apply(lambda y: f"Rp {int(y):,}")
             ).style.hide(axis="index"),
@@ -915,7 +892,7 @@ with col_bot_ratio:
             x="RATIO",
             y="LABEL",
             orientation="h",
-            text=(bot_ratio["RATIO"] * 100).round(2).astype(str) + "%",
+            text=bot_ratio["RATIO"].round(1).astype(str).str.replace('.', ',') + "%",
             color="RATIO",
             color_continuous_scale="Reds",
             category_orders={"LABEL": order_bot_ratio},
@@ -924,6 +901,7 @@ with col_bot_ratio:
         )
 
         fig_bot_ratio.update_traces(
+            hovertemplate="Province (Year): %{y}<br>Ratio: %{x:.1f}%<extra></extra>",
             textposition="inside",
             textfont=dict(color="white", size=12)
         )
